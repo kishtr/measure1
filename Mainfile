@@ -1,0 +1,151 @@
+# -*- coding: utf-8 -*-
+import numpy as np
+import pandas as pd
+import sys
+import time
+import tempfile
+import random
+import pyvisa
+import sys
+from pymeasure.instruments.keithley import Keithley2400
+from pymeasure.instruments.keithley import Keithley2000
+from time import sleep
+from pymeasure.log import console_log
+from pymeasure.display.Qt import QtGui
+from pymeasure.display.windows import ManagedWindow
+from pymeasure.experiment import Procedure, Results
+from pymeasure.experiment import IntegerParameter, FloatParameter, Parameter
+from win32com.shell import shell, shellcon
+import os
+import matplotlib.pyplot as plt 
+import matplotlib.animation as animation
+from matplotlib import style
+
+###############################################################################################################################
+rm = pyvisa.ResourceManager()
+keithleyVsd = Keithley2400("GPIB::3")
+keithleygate = Keithley2400("GPIB::4")
+#keithleymulti = Keithley2000("GPIB::2")
+###############################################################################################################################
+#
+#keithley.apply_current()                # Sets up to source current
+#keithley.source_current_range = 10e-3   # Sets the source current range to 10 mA
+#keithley.compliance_voltage = 1       # Sets the compliance voltage to 10 V
+#keithley.source_current = 0             # Sets the source current to 0 mA
+#keithley.enable_source()                # Enables the source output
+#
+#keithley.measure_voltage()              # Sets up to measure voltage
+#
+#keithley.ramp_to_current(5e-3)          # Ramps the current to 5 mA
+#print(keithley.voltage)                 # Prints the voltage in Volts
+
+################################################################################################################################
+
+startsweep = 0; endsweep = 100; stepsize = 0.5;
+biasvoltage = 100e-3;
+
+filename = r'D:\Graphene Project 2\Measurements\ParyPBA\S1\20201018-s10-1-DIW';
+
+totalpoints= (abs(startsweep) + abs(endsweep))/stepsize +1;
+sweeppoints = np.linspace(startsweep,endsweep,totalpoints);
+
+###############################################################################################################################
+    
+out=0;
+p = 0;
+q = startsweep;
+r = startsweep;
+
+###############################################################################################################################
+# Allocate arrays to store the measurement results
+
+currents = np.linspace(startsweep,endsweep,totalpoints);
+voltages = np.linspace(startsweep,endsweep,totalpoints);
+currentsVsd = np.linspace(startsweep,endsweep,totalpoints);
+voltagesVsd = np.linspace(startsweep,endsweep,totalpoints);
+resmulti = np.linspace(startsweep,endsweep,totalpoints);
+
+###############################################################################################################################
+
+#keithley.shutdown()                     # Ramps the current to 0 mA and disables output
+#keithley - GATE
+delay = FloatParameter('Delay Time', units='s', default=0.01)
+keithleygate.apply_voltage()                # Sets up to source current
+keithleygate.source_voltage_range = 50  # Sets the source current range to 10 mA
+keithleygate.compliance_current = 10e-3     # Sets the compliance voltage to 10 V
+#keithleygate.source_voltage = 0             # Sets the source current to 0 mA
+keithleygate.current_nplc = 0.1
+keithleygate.enable_source()                # Enables the source output
+keithleyVsd.measure_current()
+###############################################################################################################################
+
+#keithley - Source and current measure!
+
+delay = FloatParameter('Delay Time', units='s', default=0.01)
+keithleyVsd.apply_voltage()                # Sets up to source current
+#keithleyVsd.source_voltage_range = 1e-3   # Sets the source current range to 10 mA
+keithleyVsd.compliance_current = 10e-3    # Sets the compliance voltage to 10 V
+keithleyVsd.current_nplc = 0.1
+keithleyVsd.source_voltage = biasvoltage           # Sets the source current to 0 mA
+keithleyVsd.enable_source()                # Enables the source output
+keithleyVsd.measure_current()
+
+
+###############################################################################################################################
+#delay = FloatParameter('Delay Time', units='s', default=0.01)
+#keithleymulti.measure_current()                # Sets up to source current
+#keithleymulti.current_range = 0.1e-3   # Sets the source current range to 10 mA
+#keithleymulti.compliance_current = 10e-3     # Sets the compliance voltage to 10 V
+#keithleymulti.auto_range()
+##keithleymulti.enable_source()                # Enables the source output
+
+###############################################################################################################################
+
+
+keithleygate.measure_current(nplc=1,auto_range=True) 
+keithleyVsd.measure_current(nplc=1,auto_range=True)      
+      
+i=0;
+y=0;
+p = 0;
+q = startsweep;
+r = startsweep;
+out = startsweep;
+   
+
+while r<=endsweep and i<=totalpoints:
+#while i<=(totalpoints-1):
+    keithleygate.ramp_to_voltage(out);  
+#    out = q-stepsize;          
+    voltages[i] = out;
+    currents[i] = keithleygate.current;
+    currentsVsd[i]= keithleyVsd.current;
+    resmulti[i] = biasvoltage/currentsVsd[i];
+    i=i+1;
+    r=r+stepsize;
+    out = q+stepsize;                
+    q = out;  
+    data = pd.DataFrame({'Gate Current (A)': currents, 
+                     'Voltage (V)': voltages, 
+                     'ISD Current (A)': currentsVsd, 
+                     'Resistance (Ohms)': resmulti,})
+    data.to_csv(filename)   
+
+###############################################################################################################################
+
+keithleyVsd.ramp_to_voltage(0)
+keithleygate.ramp_to_voltage(0)     
+
+###############################################################################################################################
+
+ 
+
+plt.plot(voltages, resmulti, 'ro-')			
+plt.show()
+
+###############################################################################################################################         
+
+keithleygate.shutdown()         
+keithleyVsd.shutdown()   
+
+###############################################################################################################################          
